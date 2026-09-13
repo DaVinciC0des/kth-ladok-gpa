@@ -1,0 +1,15 @@
+{
+  "name": "kth-ladok-gpa",
+  "private": true,
+  "version": "0.3.0",
+  "description": "Browser extension: GPA calculator for KTH's Ladok",
+  "type": "commonjs",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.1",
+    "vitest": "^5.0.0"
+  }
+}

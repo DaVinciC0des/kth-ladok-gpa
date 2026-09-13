@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "KTH Ladok GPA",
+  "version": "0.3.0",
+  "description": "Shows your weighted and unweighted GPA on Ladok, plus how to raise it and what it takes to reach a KTH exchange university's grade guideline.",
+  "host_permissions": ["https://student.ladok.se/*", "https://www.kth.se/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://student.ladok.se/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
