@@ -8,6 +8,8 @@ const {
   extractApplicationStore,
   remainingCurriculumHp,
   inferAdmissionTerm,
+  dedupeRetakenCourses,
+  pickAttestedKursversion,
   programLabel,
   findAllPrograms,
   buildSelectableOptions,
@@ -140,6 +142,58 @@ describe("inferAdmissionTerm", () => {
 
   it("returns null when no course has a usable start date", () => {
     expect(inferAdmissionTerm([{ Utbildningsinformation: {} }])).toBeNull();
+  });
+});
+
+describe("dedupeRetakenCourses", () => {
+  it("passes through courses with distinct kurskod unchanged", () => {
+    const kurser = [
+      { Utbildningsinformation: { Utbildningskod: "AAA", Studieperiod: { Startdatum: "2024-09-01" } } },
+      { Utbildningsinformation: { Utbildningskod: "BBB", Studieperiod: { Startdatum: "2024-09-01" } } },
+    ];
+    expect(dedupeRetakenCourses(kurser)).toEqual(kurser);
+  });
+
+  it("collapses a retaken course to its most recently started entry", () => {
+    const original = {
+      Utbildningsinformation: { Utbildningskod: "AAA", Studieperiod: { Startdatum: "2023-09-01" } },
+    };
+    const retake = {
+      Utbildningsinformation: { Utbildningskod: "AAA", Studieperiod: { Startdatum: "2024-09-01" } },
+    };
+    const result = dedupeRetakenCourses([original, retake]);
+    expect(result).toEqual([retake]);
+  });
+
+  it("keeps entries with no Utbildningskod instead of dropping them", () => {
+    const noKod = { Utbildningsinformation: {} };
+    const kurser = [
+      noKod,
+      { Utbildningsinformation: { Utbildningskod: "AAA", Studieperiod: { Startdatum: "2024-09-01" } } },
+    ];
+    expect(dedupeRetakenCourses(kurser)).toHaveLength(2);
+  });
+});
+
+describe("pickAttestedKursversion", () => {
+  it("returns undefined for an empty/missing list", () => {
+    expect(pickAttestedKursversion(undefined)).toBeUndefined();
+    expect(pickAttestedKursversion([])).toBeUndefined();
+  });
+
+  it("falls back to the first entry when none has an attested grade yet", () => {
+    const kursversioner = [{ VersionensKurs: { Omfattning: 7.5 } }, { VersionensKurs: { Omfattning: 7.5 } }];
+    expect(pickAttestedKursversion(kursversioner)).toBe(kursversioner[0]);
+  });
+
+  it("prefers whichever entry actually has an attested grade, even if not first", () => {
+    const graded = {
+      VersionensKurs: {
+        ResultatPaUtbildning: { SenastAttesteradeResultat: { Betygsgradsobjekt: { Kod: "A" } } },
+      },
+    };
+    const ungraded = { VersionensKurs: {} };
+    expect(pickAttestedKursversion([ungraded, graded])).toBe(graded);
   });
 });
 

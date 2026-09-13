@@ -238,6 +238,22 @@
     return fetchJson(url, "studiedeltagande");
   }
 
+  // Picks which Kursversioner entry to read the attested grade from. There's
+  // no documented guarantee the array is sorted with the relevant version
+  // first, so prefer whichever entry actually has an attested result over
+  // blindly trusting index 0 - falls back to the first entry (matching the
+  // only behavior we could previously verify) when none has one yet, e.g.
+  // the course is still ongoing.
+  function pickAttestedKursversion(kursversioner) {
+    if (!kursversioner || !kursversioner.length) return undefined;
+    const withGrade = kursversioner.find(
+      (kv) =>
+        kv?.VersionensKurs?.ResultatPaUtbildning?.SenastAttesteradeResultat?.Betygsgradsobjekt
+          ?.Kod
+    );
+    return withGrade || kursversioner[0];
+  }
+
   async function fetchGradeForCourse(kurs, proxyId) {
     const kurskod = kurs.Utbildningsinformation.Utbildningskod;
     const link = kurs.link.find((l) => l.rel.includes("egenkursinformation"));
@@ -246,7 +262,7 @@
     try {
       const url = toProxyUrl(link.uri, "resultat", proxyId);
       const data = await fetchJson(url, "resultat");
-      const kv = data.Kursversioner?.[0];
+      const kv = pickAttestedKursversion(data.Kursversioner);
       const betyg =
         kv?.VersionensKurs?.ResultatPaUtbildning?.SenastAttesteradeResultat?.Betygsgradsobjekt
           ?.Kod ?? null;
@@ -279,6 +295,34 @@
     if (!earliest) return null;
     const year = earliest.getMonth() < 6 ? earliest.getFullYear() - 1 : earliest.getFullYear();
     return `${year}2`;
+  }
+
+  // Collapses multiple Tillfallesdeltagande entries that share the same
+  // kurskod - e.g. a retaken/re-registered course can produce a second
+  // entry alongside the original - into one, keeping whichever started most
+  // recently. Without this, calculateGPA would count that course's hp and
+  // grade twice. An entry with no Utbildningskod is passed through
+  // untouched rather than dropped, since we can't tell what it's a retake
+  // of (if anything).
+  function dedupeRetakenCourses(kurser) {
+    const byKurskod = new Map();
+    const withoutKurskod = [];
+    for (const k of kurser) {
+      const kod = k.Utbildningsinformation?.Utbildningskod;
+      if (!kod) {
+        withoutKurskod.push(k);
+        continue;
+      }
+      const existing = byKurskod.get(kod);
+      if (!existing) {
+        byKurskod.set(kod, k);
+        continue;
+      }
+      const existingStart = new Date(existing.Utbildningsinformation?.Studieperiod?.Startdatum || 0);
+      const currentStart = new Date(k.Utbildningsinformation?.Studieperiod?.Startdatum || 0);
+      if (currentStart >= existingStart) byKurskod.set(kod, k);
+    }
+    return [...withoutKurskod, ...byKurskod.values()];
   }
 
   // --- GPA calculation ---
@@ -1828,7 +1872,8 @@
       const courseDataList = await Promise.all(
         option.nodes.map((node) => fetchProgramCourses(node, currentProxyId))
       );
-      const kurser = courseDataList.flatMap((cd) => cd.Tillfallesdeltaganden || []);
+      const rawKurser = courseDataList.flatMap((cd) => cd.Tillfallesdeltaganden || []);
+      const kurser = dedupeRetakenCourses(rawKurser);
       const gradePromises = kurser.map((k) => fetchGradeForCourse(k, currentProxyId));
       const courses = await Promise.all(gradePromises);
       const result = calculateGPA(courses);
@@ -1847,7 +1892,7 @@
         currentProgramLabel = option.label;
         currentProgramCode =
           option.nodes.length === 1 ? option.nodes[0].Utbildningsinformation.Utbildningskod : null;
-        currentAdmissionTerm = currentProgramCode ? inferAdmissionTerm(kurser) : null;
+        currentAdmissionTerm = currentProgramCode ? inferAdmissionTerm(rawKurser) : null;
         exchangeSelection.skola = null;
         exchangeSelection.skolaAutoDetected = false;
         exchangeSelection.skolaOverrideOpen = false;
@@ -1960,6 +2005,8 @@
       extractApplicationStore,
       remainingCurriculumHp,
       inferAdmissionTerm,
+      dedupeRetakenCourses,
+      pickAttestedKursversion,
       programLabel,
       findAllPrograms,
       buildSelectableOptions,
