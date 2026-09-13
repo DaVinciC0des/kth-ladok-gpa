@@ -72,6 +72,12 @@ describe("calculateGPA", () => {
     expect(r.totalHp).toBe(7.5);
   });
 
+  it("recognizes a lowercase 'p' as Pass too, consistent with gradePoints' own case-insensitivity", () => {
+    const r = calculateGPA([{ kurskod: "AAA", betyg: "p", hp: 7.5 }]);
+    expect(r.passCount).toBe(1);
+    expect(r.unknownCount).toBe(0);
+  });
+
   it("excludes ongoing courses (no grade yet) from the average and tracks their hp separately", () => {
     const r = calculateGPA([
       { kurskod: "AAA", betyg: "A", hp: 7.5 },
@@ -129,6 +135,7 @@ describe("rankRetakeCandidates", () => {
   it("excludes Pass/Fail and errored courses, which have no letter grade to raise", () => {
     const courses = [
       { kurskod: "PPP", betyg: "P", hp: 7.5 },
+      { kurskod: "PPP2", betyg: "p", hp: 7.5 }, // lowercase - same as gradePoints' own case-insensitivity
       { kurskod: "ERR", betyg: null, hp: 7.5, status: "error" },
     ];
     expect(rankRetakeCandidates(courses, 15)).toEqual([]);

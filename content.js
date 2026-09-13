@@ -35,6 +35,14 @@
     return key !== undefined ? GRADE_POINTS[key] : undefined;
   }
 
+  // Case-insensitive check for the ungraded-pass code "P", matching
+  // gradePoints' own case-insensitivity above - callers must not use a
+  // plain `=== "P"` here, since Ladok's casing isn't fully under our
+  // control (the same reason gradePoints itself is case-insensitive).
+  function isPassGrade(betyg) {
+    return typeof betyg === "string" && betyg.toUpperCase() === "P";
+  }
+
   const STORAGE_KEY = "kthGpaSelectedProgramId";
 
   let widgetEl = null;
@@ -303,7 +311,7 @@
         ongoingHp += hp;
         continue;
       }
-      if (c.betyg === "P") {
+      if (isPassGrade(c.betyg)) {
         passCount++;
         continue;
       }
@@ -423,7 +431,7 @@
   function rankRetakeCandidates(courses, totalHp) {
     if (!totalHp) return [];
     return courses
-      .filter((c) => !c.status && c.betyg && c.betyg !== "P")
+      .filter((c) => !c.status && c.betyg && !isPassGrade(c.betyg))
       .map((c) => {
         const points = gradePoints(c.betyg);
         if (points === undefined || points >= GRADE_POINTS.A) return null;
@@ -1017,7 +1025,7 @@
           kind = "error";
         } else if (!c.betyg) {
           kind = "ongoing";
-        } else if (c.betyg === "P") {
+        } else if (isPassGrade(c.betyg)) {
           kind = "pass";
         } else {
           const points = gradePoints(c.betyg);
@@ -1435,15 +1443,25 @@
     if (curriculumKey && futureCurriculumKey !== curriculumKey && !futureCurriculumLoading) {
       futureCurriculumLoading = true;
       futureCurriculumError = null;
+      // Snapshot the program this fetch is for. Recomputed (not the
+      // closure-captured curriculumKey) at resolution time so a response
+      // for a program the student has since switched away from is detected
+      // as stale even though currentProgramCode/currentAdmissionTerm have
+      // already moved on.
+      const requestedKey = curriculumKey;
+      const isStillCurrent = () =>
+        requestedKey === (currentProgramCode ? `${currentProgramCode}:${currentAdmissionTerm}` : null);
       fetchFutureCurriculum(currentProgramCode, currentAdmissionTerm)
         .then((data) => {
+          if (!isStillCurrent()) return; // a different program is selected now
           futureCurriculum = data;
-          futureCurriculumKey = curriculumKey;
+          futureCurriculumKey = requestedKey;
           if (data.owningSchool) applySkola(data.owningSchool);
         })
         .catch((e) => {
+          if (!isStillCurrent()) return; // a different program is selected now
           futureCurriculum = null;
-          futureCurriculumKey = curriculumKey;
+          futureCurriculumKey = requestedKey;
           futureCurriculumError = e.message;
           console.error("[KTH GPA widget] Could not load future curriculum", e);
         })
@@ -1564,19 +1582,30 @@
       }
       exchangeSelection.loadingRequirement = true;
       renderEfficiencySection(slot);
-      fetchExchangeRequirement(select.value)
+      // Snapshot which university this fetch is for, so a slower response
+      // for a university the student has since switched away from can't
+      // overwrite a newer, already-displayed selection's result.
+      const requestedUrl = select.value;
+      fetchExchangeRequirement(requestedUrl)
         .then(({ value, snippet }) => {
+          if (exchangeSelection.schoolUrl !== requestedUrl) return; // stale response
           exchangeSelection.target = value;
           exchangeSelection.snippet = snippet;
         })
         .catch((e) => {
+          if (exchangeSelection.schoolUrl !== requestedUrl) return; // stale response
           exchangeSelection.target = null;
           exchangeSelection.snippet = null;
           exchangeSelection.error = e.message;
-          console.error("[KTH GPA widget] Could not fetch/parse", select.value, e);
+          console.error("[KTH GPA widget] Could not fetch/parse", requestedUrl, e);
         })
         .finally(() => {
-          exchangeSelection.loadingRequirement = false;
+          // Only clear the loading flag if this is still the request the
+          // UI is showing - otherwise a stale finally would prematurely
+          // hide the "loading" state for a newer, still in-flight request.
+          if (exchangeSelection.schoolUrl === requestedUrl) {
+            exchangeSelection.loadingRequirement = false;
+          }
           renderEfficiencySection(slot);
         });
     });
@@ -1767,11 +1796,15 @@
       const courses = await Promise.all(gradePromises);
       const result = calculateGPA(courses);
       if (token !== selectionToken) return; // a newer selection has since started
+      // Compare by the picker's unique option id, not the display label -
+      // two distinct programs can share a label (e.g. both falling back to
+      // "Okänt program"), which would otherwise skip this reset entirely.
+      const isNewProgram = currentSelectedProgramId !== option.id;
       currentCourses = courses;
       currentResult = result;
       currentSelectedProgramId = option.id;
       recordGpaHistoryEntry(option.id, result);
-      if (currentProgramLabel !== option.label) {
+      if (isNewProgram) {
         // A different program means the previously guessed/chosen KTH
         // school (and everything picked under it) no longer applies.
         currentProgramLabel = option.label;

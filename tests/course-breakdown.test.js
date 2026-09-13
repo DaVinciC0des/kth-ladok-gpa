@@ -32,6 +32,11 @@ describe("buildCourseBreakdown", () => {
     expect(breakdown[0]).toMatchObject({ kind: "pass", contribution: null });
   });
 
+  it("classifies a lowercase 'p' as 'pass' too, consistent with gradePoints' case-insensitivity", () => {
+    const breakdown = buildCourseBreakdown([{ kurskod: "AAA", betyg: "p", hp: 7.5 }], 0);
+    expect(breakdown[0]).toMatchObject({ kind: "pass", contribution: null });
+  });
+
   it("classifies courses with no grade yet as 'ongoing'", () => {
     const breakdown = buildCourseBreakdown([{ kurskod: "AAA", betyg: null, hp: 7.5 }], 0);
     expect(breakdown[0].kind).toBe("ongoing");
