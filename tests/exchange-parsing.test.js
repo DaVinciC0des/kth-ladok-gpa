@@ -156,6 +156,14 @@ describe("guessSchoolForProgram", () => {
     ];
     expect(guessSchoolForProgram("Civilingenjör Informationsteknik", disagreeing)).toBe("EECS");
   });
+
+  it("ignores a blank/spacer row instead of letting it match every label", () => {
+    const withBlankRow = [{ typ: "", program: "   ", skola: "ABE" }, ...rows];
+    expect(guessSchoolForProgram("Civilingenjörsprogrammet i Datateknik", withBlankRow)).toBe(
+      "EECS"
+    );
+    expect(guessSchoolForProgram("Något helt okänt program", withBlankRow)).toBeNull();
+  });
 });
 
 describe("computeRequiredAverage", () => {

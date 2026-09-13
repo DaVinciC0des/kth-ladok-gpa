@@ -253,6 +253,7 @@
       const hp = kv?.VersionensKurs?.Omfattning ?? null;
       return { kurskod, betyg, hp };
     } catch (e) {
+      console.error("[KTH GPA widget] Could not fetch grade for", kurskod, e);
       return { kurskod, betyg: null, hp: null, status: "error" };
     }
   }
@@ -529,9 +530,27 @@
   // context and are subject to Ladok's Content-Security-Policy, which can
   // silently block a cross-origin request to kth.se. The service worker
   // isn't part of any page and isn't bound by any page's CSP.
+  const FETCH_KTH_PAGE_TIMEOUT_MS = 20000;
+
   function fetchKthPage(url) {
     return new Promise((resolve, reject) => {
+      let settled = false;
+
+      // Without this, an evicted/unresponsive service worker (MV3 workers
+      // can be killed mid-fetch) or a hung kth.se response would leave this
+      // promise - and every feature waiting on it - pending forever, with
+      // no error and no way to retry.
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        reject(new Error("Fick inget svar från bakgrundsprocessen i tid"));
+      }, FETCH_KTH_PAGE_TIMEOUT_MS);
+
       chrome.runtime.sendMessage({ type: "fetchKthPage", url }, (response) => {
+        if (settled) return; // already timed out
+        settled = true;
+        clearTimeout(timer);
+
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message));
           return;
@@ -675,7 +694,13 @@
     const label = normalizeProgramText(programLabelText);
     if (!label) return null;
 
-    let matches = rows.filter((r) => label.includes(normalizeProgramText(r.program)));
+    // A blank/spacer row in KTH's table normalizes to an empty string, and
+    // `label.includes("")` is always true - explicitly exclude that so such
+    // a row can never match (or win a tie-break against) every program.
+    let matches = rows.filter((r) => {
+      const normalizedProgram = normalizeProgramText(r.program);
+      return normalizedProgram && label.includes(normalizedProgram);
+    });
     if (!matches.length) return null;
 
     if (matches.length > 1) {
@@ -1257,6 +1282,18 @@
       note.textContent =
         "Förutsätter att kursen tillåter omexamination för högre betyg - kolla kursplanen/examinatorn för just den kursen.";
       section.appendChild(note);
+    }
+
+    // rankRetakeCandidates can't rank a course whose grade code it doesn't
+    // recognize (there's no points value to compute a gain from) - say so
+    // explicitly here too, since calculateGPA/buildCourseBreakdown already
+    // surface these elsewhere (unknownCount / kind "unknown") and silently
+    // omitting them from just this list would look like they don't exist.
+    if (currentResult && currentResult.unknownCount > 0) {
+      const unknownNote = document.createElement("div");
+      unknownNote.className = "kgw-hint";
+      unknownNote.textContent = `${currentResult.unknownCount} kurs(er) med okänd betygskod är inte med i den här listan (se Kursuppdelning).`;
+      section.appendChild(unknownNote);
     }
 
     panel.appendChild(section);
