@@ -81,4 +81,9 @@ describe("describeBreakdownItem", () => {
     const text = describeBreakdownItem({ kurskod: "AAA", betyg: null, hp: 0, kind: "error", contribution: null });
     expect(text).toContain("kunde inte hämta betyget");
   });
+
+  it("describes a graded course with a null contribution (totalHp 0) instead of throwing", () => {
+    const text = describeBreakdownItem({ kurskod: "AAA", betyg: "A", hp: 0, kind: "graded", contribution: null });
+    expect(text).toContain("bidrar med 0.000 till viktat snitt");
+  });
 });

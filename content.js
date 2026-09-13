@@ -1037,10 +1037,14 @@
   function describeBreakdownItem(c) {
     const hpText = `${c.hp} hp`;
     switch (c.kind) {
-      case "graded":
-        return `${c.kurskod} — ${c.betyg} (${hpText}) — bidrar med ${c.contribution.toFixed(
-          3
-        )} till viktat snitt`;
+      case "graded": {
+        // contribution can be null when totalHp is 0 despite a graded course
+        // existing (e.g. every graded course's hp came back as 0/malformed) -
+        // there's no meaningful share of the average to report in that case.
+        const contributionText =
+          c.contribution !== null ? c.contribution.toFixed(3) : "0.000";
+        return `${c.kurskod} — ${c.betyg} (${hpText}) — bidrar med ${contributionText} till viktat snitt`;
+      }
       case "pass":
         return `${c.kurskod} — P (${hpText}) — räknas inte in i snittet`;
       case "ongoing":
@@ -1780,6 +1784,7 @@
         exchangeSelection.schoolUrl = "";
         exchangeSelection.target = null;
         exchangeSelection.snippet = null;
+        exchangeSelection.hpOverride = null;
         exchangeSchools = null;
         exchangeSchoolsForSkola = null;
         futureCurriculum = null;
