@@ -1,5 +1,7 @@
 # KTH Ladok GPA
 
+[![Tests](https://github.com/DaVinciC0des/kth-ladok-gpa/actions/workflows/test.yml/badge.svg)](https://github.com/DaVinciC0des/kth-ladok-gpa/actions/workflows/test.yml)
+
 A browser extension (Manifest V3) that shows your weighted and unweighted GPA
 directly on Ladok's "Min utbildning" page, based on completed courses in a
 program you choose.
@@ -191,6 +193,7 @@ Also discussed, not yet prioritized:
       the existing retake-impact ranking.
 - [x] GPA history/trend - snapshot the computed GPA (in `localStorage`) each
       time the widget runs, and plot it over time.
+- [x] CI (GitHub Actions) running the test suite on every push/PR to `main`.
 - [ ] README screenshots/GIF of the widget in action.
 - [ ] Publish to the Chrome Web Store (even unlisted) instead of only
       "load unpacked".
