@@ -194,6 +194,12 @@ Also discussed, not yet prioritized:
 - [x] GPA history/trend - snapshot the computed GPA (in `localStorage`) each
       time the widget runs, and plot it over time.
 - [x] CI (GitHub Actions) running the test suite on every push/PR to `main`.
+- [x] Guard against retake double-counting and an unverified Kursversioner[0]
+      pick - `dedupeRetakenCourses` collapses a retaken course's duplicate
+      `Tillfallesdeltagande` entries to the most recently started one before
+      the GPA math runs, and `pickAttestedKursversion` picks whichever
+      `Kursversioner` entry actually has an attested grade instead of
+      blindly trusting index 0.
 - [ ] README screenshots/GIF of the widget in action.
 - [ ] Publish to the Chrome Web Store (even unlisted) instead of only
       "load unpacked".
